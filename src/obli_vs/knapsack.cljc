@@ -8,94 +8,102 @@
 (s/def ::items (s/coll-of ::item))
 (s/def ::sack (s/keys :req [::size ::items]))
 
-;; (defn best-fit [start max-size items]
-;;   (loop [i start:w
 
-;;          size max-size]
-;;     (if (pos? i)
-;;       (let [item (nth items (- i 1))
-;;             item-size (get item :size)
-;;             item-value (get item :value)]
-;;         (if (> item-size size)
-;;           (recur (- i 1) size)
-;;           (max
-;;             (recur (- i 1) size)
-;;             (recur (- i 1) (- size item-size)))))
-;;       0 )))
-;
-;; (defn accept-tuple [accepted rejected] {:accepted accepted :rejected rejected})
-;
-;; (defn accept [start max-size items items-diff]
-;;   (loop [i start]
-;;     (if (pos? i)
-;;       (let [item (nth items (- i 1))
-;;             {:keys [accepted rejected]} items-diff
-;;             best-fit-with-index #(best-fit % max-size items)]
-;;         (if (= (best-fit-with-index i) (best-fit-with-index (- i 1)))
-;;           (recur (- i 1) max-size items (accept-tuple accepted (conj rejected item)))
-;;           (recur (- i 1) max-size items (accept-tuple (conj accepted item) rejected))))
-;;       items-diff )))
-;
-;; (defn pack [sack items]
-;;   (let [item-count (count items)
-;;         empty (empty-space sack)
-;;         accepted (accept-tuple [] [])
-;;         {:keys [accepted rejected]} (accept item-count empty item accepted)
-;;         new-items (concat (get sack :items) accepted)]
-;;     [(assoc sack :items new-items) rejected]))
+(defn prop-sum 
+  "Sum of a given property in a list of items"
+  [key items]
+  (reduce #(+ %1 (get %2 key)) 0 items))
 
+(defn sizes
+  "Sum of sizes of a list of items"
+  [items]
+  (prop-sum :size items))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Try again the other way
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn values
+  "Sum of values of a list of items"
+  [items]
+  (prop-sum :value items))
 
-(defn prop-sum [key items] (reduce #(+ %1 (get items key)) 0 items))
-(defn sizes [items] (prop-sum :size items))
-(defn values [items] (prop-sum :value items))
+(defn prop-at
+  "Value of a property of an item at a given index"
+  [key i items]
+  (get (nth items i) key))
 
-(defn prop-at [key i items] (get (nth items i) key))
-(defn size-at [i items] (prop-at :size i items))
-(defn value-at [i items] (prop-at :value i items))
+(defn size-at
+  "Size of an item at a given index"
+  [i items]
+  (prop-at :size i items))
+
+(defn value-at
+  "Value of an item at a given index"
+  [i items]
+  (prop-at :value i items))
+
+(defn empty-space
+  "The empty space in a sack"
+  [{:keys [size items]}]
+  (- size (sizes items)))
+
+(defn init-table
+  "Helper function to create an initial table to build the best-fit table"
+  [max-size]
+  [(into [] (repeat max-size 0))])
+
+(defn get-from-col [acc i j] (get-in acc [i j]))
+(defn get-from-prev-col [acc i j] (get-from-col acc (dec i) j))
+
+(defn best-fit-col
+  "Helper function to build a column for the best fit table"
+  [max-size acc i items]
+  (loop [acc2 [] j 0]
+    (if (< j max-size)
+      (if (> (size-at (dec i) items) j) 
+        (recur (conj acc2 (get-from-prev-col acc i j)) (inc j))
+        (recur
+          (conj acc2
+            (max
+              (get-from-prev-col acc i j)
+              (+
+                (value-at (dec i) items)
+                (get-from-col acc (dec i) (- j (size-at (dec i) items))))))
+           (inc j)))
+      acc2 )))
 
 (defn best-fit-table
-  "build a table of the best fits per size"
-  [items]
-  (let [m (atom [(into [] (repeat (sizes items) 0))])]
-    (for [i (range (count items))
-          j (range (sizes items))]
-      (if (> (size-at i items) j)
-        (swap! m assoc-in [i j] (get-in m [(- i 1) j]))
-        (swap! m assoc-in [i j]
-          (max
-            (get-in m [(- i 1) j])
-            (+
-              (value-at i items)
-              (get-in m [i (- j (weight-at i j))]))))))
-    m))
+  "Build a table of the best fitting items per up to a maximum sack size"
+  [max-size items]
+  (loop [acc (init-table max-size) i 1]
+    (if (< i (count items))
+      (recur (conj acc (best-fit-col max-size acc i items)) (inc i))
+      acc )))
 
-(defn best-fit [max-size items]
-  (loop [table (best-fit-table items)
-         max-value 0
-         row-index 0
-         i 0]
-    (if (< row-index (count itmes))
-      (let [row (first table)
-            max-value-for-row (reduce max row)]
-        (if (>= max-value-for-row max-value)
-          (recur
-            (rest table)
-            max-value-for-row
-            (+ row-index 1)
-            row-index)
-          (recur (rest table) max-value (+ row-index 1) i)))
-      i))) ;; take this number of items from the list
+(defn best-fit
+  "Returns the number of items that fit best for a given sack size"
+  [max-size items]
+  (reduce #(max %1 (nth %2 (dec max-size))) 0 (best-fit-table max-size items)))
 
+(defn conj-key [coll key val]
+  (assoc coll key (conj (get coll key) val)))
 
-(defn pack [sack items]
+(defn accept
+  "Find the items that best fit into the sack. Returns a map of items that were
+  accepted, and those that were rejected."
+  [max-size items]
+  (let [best (best-fit max-size items)
+        j (dec max-size)]
+    (loop [i 0 acc {:accept [] :reject []}]
+      (if (< i (count items))
+        (let [curr-value (+ (values (get acc :accept)) (value-at i items))]
+          (if (<= curr-value best)
+            (recur (inc i) (conj-key acc :accept (nth items i)))
+            (recur (inc i) (conj-key acc :reject (nth items i)))))
+        acc ))))
+
+(defn pack
+  "Pack best fitting items into a sack"
+  [sack items]
   (let [item-count (count items)
         empty (empty-space sack)
-        num-accepted (best-fit empty items)
-        accepted (take num-accepted items)
-        rejected (drop num-accepted items)
-        new-items (concat (get sack :items) accepted)]
-    {:sack (assoc sack :items new-items) :rejected rejected}))
+        {:keys [accept reject]} (accept empty items)
+        new-items (into [] (concat (get sack :items) accept))]
+    {:sack (assoc sack :items new-items) :rejected reject}))
