@@ -9,7 +9,7 @@
 (s/def ::sack (s/keys :req [::size ::items]))
 
 
-(defn prop-sum 
+(defn- prop-sum 
   "Sum of a given property in a list of items"
   [key items]
   (reduce #(+ %1 (get %2 key)) 0 items))
@@ -24,7 +24,7 @@
   [items]
   (prop-sum :value items))
 
-(defn prop-at
+(defn- prop-at
   "Value of a property of an item at a given index"
   [key i items]
   (get (nth items i) key))
@@ -44,19 +44,24 @@
   [{:keys [size items]}]
   (- size (sizes items)))
 
-(defn init-table
+(defn- init-table
   "Helper function to create an initial table to build the best-fit table"
   [max-size]
-  [(into [] (repeat max-size 0))])
+  [(into [] (repeat (inc max-size) 0))])
 
-(defn get-from-col [acc i j] (get-in acc [i j]))
-(defn get-from-prev-col [acc i j] (get-from-col acc (dec i) j))
+(defn- get-from-col [acc i j] (get-in acc [i j]))
+(defn- get-from-prev-col [acc i j] (get-from-col acc (dec i) j))
 
-(defn best-fit-col
+;; The best-fit algorithm is more-or-less lifted from the Wikipedia page about
+;; the Knapsack Problem (https://en.wikipedia.org/wiki/Knapsack_problem).
+;; A few modifications needed to be made, and the whole thing also needed
+;; to be ported to Clojure.
+
+(defn- best-fit-col
   "Helper function to build a column for the best fit table"
   [max-size acc i items]
   (loop [acc2 [] j 0]
-    (if (< j max-size)
+    (if (<= j max-size)
       (if (> (size-at (dec i) items) j) 
         (recur (conj acc2 (get-from-prev-col acc i j)) (inc j))
         (recur
@@ -69,41 +74,44 @@
            (inc j)))
       acc2 )))
 
-(defn best-fit-table
+(defn- best-fit-table
   "Build a table of the best fitting items per up to a maximum sack size"
   [max-size items]
-  (loop [acc (init-table max-size) i 1]
-    (if (< i (count items))
-      (recur (conj acc (best-fit-col max-size acc i items)) (inc i))
-      acc )))
+    (loop [acc (init-table max-size) i 1] ;; start from 1 because the first col is all 0's
+      (if (< i (count items))
+        (recur (conj acc (best-fit-col max-size acc i items)) (inc i))
+        acc )))
 
-(defn best-fit
-  "Returns the number of items that fit best for a given sack size"
-  [max-size items]
-  (reduce #(max %1 (nth %2 (dec max-size))) 0 (best-fit-table max-size items)))
-
-(defn conj-key [coll key val]
-  (assoc coll key (conj (get coll key) val)))
-
-(defn accept
+(defn- accept
   "Find the items that best fit into the sack. Returns a map of items that were
   accepted, and those that were rejected."
   [max-size items]
-  (let [best (best-fit max-size items)
-        j (dec max-size)]
-    (loop [i 0 acc {:accept [] :reject []}]
-      (if (< i (count items))
-        (let [curr-value (+ (values (get acc :accept)) (value-at i items))]
-          (if (<= curr-value best)
-            (recur (inc i) (conj-key acc :accept (nth items i)))
-            (recur (inc i) (conj-key acc :reject (nth items i)))))
+  (let [table (best-fit-table max-size items)]
+    (loop [i (dec (count items))
+           j max-size
+           acc '()]
+      (if (and (pos? i) (pos? j))
+        (cond
+          (= (get-in table [(dec i) j]) (get-in table [i j])) ;; to the left
+            (recur (dec i) j acc) ;; move left
+          (= (get-in table [i (dec j)]) (get-in table [i j])) ;; above
+            (recur i (dec j) acc) ;; move up
+          (< (get-in table [i (dec j)]) (get-in table [i j])) ;; above
+            (recur i (- j (size-at (dec i) items)) (conj acc (nth items (dec i)))))
         acc ))))
 
 (defn pack
-  "Pack best fitting items into a sack"
+  "Pack best fitting items into a sack. Make sure your items are sorted to ensure
+  the best solution."
   [sack items]
   (let [item-count (count items)
         empty (empty-space sack)
-        {:keys [accept reject]} (accept empty items)
-        new-items (into [] (concat (get sack :items) accept))]
+        accept (accept empty items)
+        reject '()
+        new-items (concat (get sack :items) accept)]
     {:sack (assoc sack :items new-items) :rejected reject}))
+
+(best-fit-table 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
+(best-fit 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
+(accept 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
+(pack {:size 5 :items '() } (for [i (range 10)] {:size (inc i) :value (inc i)}))
