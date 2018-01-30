@@ -1,13 +1,14 @@
 (ns obli-vs.knapsack
-  (:require [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as gen]))
 
-(s/def ::size integer?)
-(s/def ::value integer)
+(s/def ::size (s/int-in 1 289)) ;; there are 288 chunks of 5 mins in a day
+(gen/generate (s/gen ::size))
+(s/def ::value #{1 2 3 5 8 13 21}) 
 
-(s/def ::item (s/keys :req [::size ::value]))
+(s/def ::item (s/keys :req-un [::size ::value]))
 (s/def ::items (s/coll-of ::item))
-(s/def ::sack (s/keys :req [::size ::items]))
-
+(s/def ::sack (s/keys :req-un [::size ::items]))
 
 (defn- prop-sum 
   "Sum of a given property in a list of items"
