@@ -100,18 +100,38 @@
             (recur i (- j (size-at (dec i) items)) (conj acc (nth items (dec i)))))
         acc ))))
 
+(defn- diff
+  "Just diffing between two lists. Stolen verbatim from StackOverflow:
+  https://stackoverflow.com/questions/23199295/how-to-diff-substract-two-lists-in-clojure"
+  [s1 s2]
+  (mapcat
+    (fn [[x n]] (repeat n x))
+    (apply merge-with - (map frequencies [s1 s2]))))
+
 (defn pack
   "Pack best fitting items into a sack. Make sure your items are sorted to ensure
-  the best solution."
+  the best solution. Note: The rejected list will be unsorted."
   [sack items]
   (let [item-count (count items)
         empty (empty-space sack)
         accept (accept empty items)
-        reject '()
-        new-items (concat (get sack :items) accept)]
+        reject (diff accept items)
+        new-items (concat (:items sack) accept)]
     {:sack (assoc sack :items new-items) :rejected reject}))
 
-(best-fit-table 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
-(best-fit 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
-(accept 5 (for [i (range 10)] {:size (inc i) :value (inc i)}))
-(pack {:size 5 :items '() } (for [i (range 10)] {:size (inc i) :value (inc i)}))
+(defn map-pack
+  "Pack best fitting items into a collection of sacks. Make sure your items are sorted to ensure
+  the best solution. You need to provide a sorting comparitor to make sure the items are properly
+  sorted after each packing operation."
+  [item-sort-by-fn sacks items]
+  (loop [sacks sacks
+         items items
+         acc-sacks '()]
+    (if (and (pos? (count sacks)) (pos? (count items)))
+      (let [{:keys [sack rejected]} (pack (first sacks) items)]
+        (recur (rest sacks) (sort-by item-sort-by-fn rejected) (conj acc-sacks sack)))
+      {:sacks acc-sacks :rejected items})))
+
+(let [sacks (reverse (for [i (range 20)] {:size (inc i) :items '({:size 1 :value 1})}))
+      items (for [i (range 20)] {:size (inc (quot i 2)) :value (inc i)})]
+  (map-pack (juxt :size :value) sacks items))

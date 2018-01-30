@@ -17,3 +17,5 @@ main.js
 .js-modules.edn
 /env/dev/env/expo/dev.cljs
 /env/dev/env/expo/index.cljs
+.nrepl-history
+yarn-error.log
