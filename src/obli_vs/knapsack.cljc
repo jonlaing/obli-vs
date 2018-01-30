@@ -131,7 +131,3 @@
       (let [{:keys [sack rejected]} (pack (first sacks) items)]
         (recur (rest sacks) (sort-by item-sort-by-fn rejected) (conj acc-sacks sack)))
       {:sacks acc-sacks :rejected items})))
-
-(let [sacks (reverse (for [i (range 20)] {:size (inc i) :items '({:size 1 :value 1})}))
-      items (for [i (range 20)] {:size (inc (quot i 2)) :value (inc i)})]
-  (map-pack (juxt :size :value) sacks items))
