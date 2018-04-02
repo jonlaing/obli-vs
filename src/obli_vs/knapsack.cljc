@@ -72,16 +72,16 @@
               (+
                 (value-at (dec i) items)
                 (get-from-col acc (dec i) (- j (size-at (dec i) items))))))
-           (inc j)))
-      acc2 )))
+          (inc j)))
+      acc2)))
 
 (defn- best-fit-table
   "Build a table of the best fitting items per up to a maximum sack size"
   [max-size items]
-    (loop [acc (init-table max-size) i 1] ;; start from 1 because the first col is all 0's
-      (if (< i (count items))
-        (recur (conj acc (best-fit-col max-size acc i items)) (inc i))
-        acc )))
+  (loop [acc (init-table max-size) i 1] ;; start from 1 because the first col is all 0's
+    (if (< i (count items))
+      (recur (conj acc (best-fit-col max-size acc i items)) (inc i))
+      acc)))
 
 (defn- accept
   "Find the items that best fit into the sack. Returns a map of items that were
@@ -94,12 +94,12 @@
       (if (and (pos? i) (pos? j))
         (cond
           (= (get-in table [(dec i) j]) (get-in table [i j])) ;; to the left
-            (recur (dec i) j acc) ;; move left
+          (recur (dec i) j acc) ;; move left
           (= (get-in table [i (dec j)]) (get-in table [i j])) ;; above
-            (recur i (dec j) acc) ;; move up
+          (recur i (dec j) acc) ;; move up
           (< (get-in table [i (dec j)]) (get-in table [i j])) ;; above
-            (recur i (- j (size-at (dec i) items)) (conj acc (nth items (dec i)))))
-        acc ))))
+          (recur i (- j (size-at (dec i) items)) (conj acc (nth items (dec i)))))
+        acc))))
 
 (defn- diff
   "Just diffing between two lists. Stolen verbatim from StackOverflow:
@@ -132,3 +132,9 @@
       (let [{:keys [sack rejected]} (pack (first sacks) items)]
         (recur (rest sacks) (sort-by item-sort-by-fn rejected) (conj acc-sacks sack)))
       {:sacks acc-sacks :rejected items})))
+
+(let [sack (gen/generate (s/gen ::sack))
+      items (gen/generate (s/gen ::items))]
+  (map-pack :value sack items))
+
+

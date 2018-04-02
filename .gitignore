@@ -19,3 +19,4 @@ main.js
 /env/dev/env/expo/index.cljs
 .nrepl-history
 yarn-error.log
+.cljs_rhino_repl/
